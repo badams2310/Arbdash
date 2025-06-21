@@ -20,25 +20,36 @@ def get_embedding(text):
             input=[text],
             model="text-embedding-3-small"
         )
+        st.info(f"✅ Embedded: {text[:40]}...")
         return response["data"][0]["embedding"]
     except Exception as e:
-        st.error(f"Embedding error: {e}")
+        st.error(f"❌ Embedding error: {e}")
         return np.zeros(1536)
 
 # --- Fetch all markets from both APIs ---
 def fetch_kalshi_markets():
     try:
         r = requests.get("https://trading-api.kalshi.com/trade-api/v2/markets")
-        return r.json()['markets']
-    except:
+        markets = r.json().get('markets', [])
+        st.write(f"🟢 Kalshi markets fetched: {len(markets)}")
+        return markets
+    except Exception as e:
+        st.error(f"Kalshi API error: {e}")
         return []
 
 def fetch_polymarket_markets():
     try:
         r = requests.get("https://api.polymarket.com/v3/markets")
-        return r.json()['markets']
-    except:
+        markets = r.json().get('markets', [])
+        st.write(f"🟣 Polymarket markets fetched: {len(markets)}")
+        return markets
+    except Exception as e:
+        st.error(f"Polymarket API error: {e}")
         return []
+
+# --- Extract polymarket title from various possible fields ---
+def extract_polymarket_title(market):
+    return market.get('question') or market.get('title') or market.get('slug') or 'unknown'
 
 # --- Match markets by embedding similarity ---
 def match_markets_ai(kalshi, polymarkets):
@@ -47,9 +58,10 @@ def match_markets_ai(kalshi, polymarkets):
         k_title = k['title']
         k_embed = get_embedding(k_title)
         for p in polymarkets:
-            p_title = p['title']
+            p_title = extract_polymarket_title(p)
             p_embed = get_embedding(p_title)
             sim = cosine_similarity([k_embed], [p_embed])[0][0]
+            st.text(f"Comparing: {k_title[:30]} ⇄ {p_title[:30]} | sim={sim:.2f}")
             if sim > 0.90:
                 matches.append({
                     'name': k_title,
