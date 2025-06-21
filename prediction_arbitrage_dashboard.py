@@ -1,12 +1,29 @@
 # 🧠 Prediction Market Arbitrage Dashboard (Kalshi vs Polymarket)
-# 📊 Auto-matches markets, checks prices, and shows arbitrage in a friendly web UI
+# 📊 Auto-matches markets using AI, checks prices, and shows arbitrage in a friendly web UI
 
 import requests
 import time
 import streamlit as st
 import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import openai
 
 st.set_page_config(page_title="Prediction Market Arbitrage Bot", layout="wide")
+
+# --- Use OpenAI API for real text embeddings ---
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+def get_embedding(text):
+    try:
+        response = openai.Embedding.create(
+            input=[text],
+            model="text-embedding-3-small"
+        )
+        return response["data"][0]["embedding"]
+    except Exception as e:
+        st.error(f"Embedding error: {e}")
+        return np.zeros(1536)
 
 # --- Fetch all markets from both APIs ---
 def fetch_kalshi_markets():
@@ -23,22 +40,23 @@ def fetch_polymarket_markets():
     except:
         return []
 
-# --- Normalize market titles for matching ---
-def normalize_title(title):
-    return title.lower().replace("?", "").replace(",", "").replace(" ", "").strip()
-
-# --- Auto-match markets by normalized title ---
-def match_markets(kalshi, polymarkets):
+# --- Match markets by embedding similarity ---
+def match_markets_ai(kalshi, polymarkets):
     matches = []
-    kalshi_lookup = {normalize_title(m['title']): m for m in kalshi}
-    for pm in polymarkets:
-        norm_title = normalize_title(pm['title'])
-        if norm_title in kalshi_lookup:
-            matches.append({
-                'name': pm['title'],
-                'kalshi': kalshi_lookup[norm_title],
-                'polymarket': pm
-            })
+    for k in kalshi:
+        k_title = k['title']
+        k_embed = get_embedding(k_title)
+        for p in polymarkets:
+            p_title = p['title']
+            p_embed = get_embedding(p_title)
+            sim = cosine_similarity([k_embed], [p_embed])[0][0]
+            if sim > 0.90:
+                matches.append({
+                    'name': k_title,
+                    'kalshi': k,
+                    'polymarket': p,
+                    'similarity': round(sim, 3)
+                })
     return matches
 
 # --- Extract best bid price for Kalshi YES ---
@@ -66,7 +84,7 @@ def calculate_profit(total_cost, stake=100):
 
 # --- Streamlit App ---
 st.title("📈 Prediction Market Arbitrage Dashboard")
-st.write("This dashboard auto-matches Kalshi and Polymarket markets and finds arbitrage opportunities.")
+st.write("This dashboard uses OpenAI to match Kalshi and Polymarket markets and finds arbitrage opportunities.")
 
 stake_amount = st.sidebar.number_input("Enter stake amount ($)", min_value=1, value=100)
 
@@ -75,7 +93,7 @@ placeholder = st.empty()
 while True:
     kalshi_data = fetch_kalshi_markets()
     poly_data = fetch_polymarket_markets()
-    matches = match_markets(kalshi_data, poly_data)
+    matches = match_markets_ai(kalshi_data, poly_data)
 
     rows = []
     for pair in matches:
@@ -88,6 +106,7 @@ while True:
         profit = calculate_profit(total, stake=stake_amount) if is_arb else None
         rows.append({
             'Market': pair['name'],
+            'Similarity': pair['similarity'],
             'Kalshi YES ($)': round(k_price, 3),
             'Polymarket NO ($)': round(p_price, 3),
             'Total Cost': round(total, 3),
