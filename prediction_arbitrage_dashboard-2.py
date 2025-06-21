@@ -30,6 +30,8 @@ def fetch_kalshi_markets():
     try:
         headers = {"Authorization": f"Bearer {st.secrets['KALSHI_API_KEY']}"}
         r = requests.get("https://trading-api.kalshi.com/trade-api/v2/markets", headers=headers)
+        st.write(f"📡 Kalshi HTTP status: {r.status_code}")
+        st.write(f"📄 Kalshi raw text: {r.text[:200]}")
         markets = r.json().get('markets', [])
         st.write(f"🟢 Kalshi markets fetched: {len(markets)}")
         return markets
@@ -41,11 +43,20 @@ def fetch_kalshi_markets():
 def fetch_polymarket_markets():
     try:
         r = requests.get("https://api.polymarket.com/v3/markets")
+        st.write(f"📡 Polymarket HTTP status: {r.status_code}")
+        st.write(f"📄 Polymarket raw text: {r.text[:200]}")
         markets = r.json().get('markets', [])
         st.write(f"🟣 Polymarket markets fetched: {len(markets)}")
         return markets
     except Exception as e:
         st.error(f"Polymarket API error: {e}")
+        st.warning("""
+            🌐 Polymarket API unreachable. This may be due to:
+            - Streamlit Cloud network restrictions
+            - DNS resolution failure
+            - Temporary outage at api.polymarket.com
+            Try running the app **locally** for full functionality.
+        """)
         return []
 
 # --- Extract polymarket title from various possible fields ---
