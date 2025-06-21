@@ -7,12 +7,23 @@ import streamlit as st
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import openai
 
 st.set_page_config(page_title="Prediction Market Arbitrage Bot", layout="wide")
 
-# --- Simulate text embedding (replace with OpenAI API for production) ---
-def simulate_embedding(text):
-    return np.random.RandomState(hash(text) % (2**32)).rand(1536)
+# --- Use OpenAI API for real text embeddings ---
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+def get_embedding(text):
+    try:
+        response = openai.Embedding.create(
+            input=[text],
+            model="text-embedding-3-small"
+        )
+        return response["data"][0]["embedding"]
+    except Exception as e:
+        st.error(f"Embedding error: {e}")
+        return np.zeros(1536)
 
 # --- Fetch all markets from both APIs ---
 def fetch_kalshi_markets():
@@ -34,10 +45,10 @@ def match_markets_ai(kalshi, polymarkets):
     matches = []
     for k in kalshi:
         k_title = k['title']
-        k_embed = simulate_embedding(k_title)
+        k_embed = get_embedding(k_title)
         for p in polymarkets:
             p_title = p['title']
-            p_embed = simulate_embedding(p_title)
+            p_embed = get_embedding(p_title)
             sim = cosine_similarity([k_embed], [p_embed])[0][0]
             if sim > 0.90:
                 matches.append({
@@ -73,7 +84,7 @@ def calculate_profit(total_cost, stake=100):
 
 # --- Streamlit App ---
 st.title("📈 Prediction Market Arbitrage Dashboard")
-st.write("This dashboard uses AI to match Kalshi and Polymarket markets and finds arbitrage opportunities.")
+st.write("This dashboard uses OpenAI to match Kalshi and Polymarket markets and finds arbitrage opportunities.")
 
 stake_amount = st.sidebar.number_input("Enter stake amount ($)", min_value=1, value=100)
 
