@@ -2,7 +2,6 @@
 # 📊 Auto-matches markets using AI, checks prices, and shows arbitrage in a friendly web UI
 
 import requests
-import time
 import streamlit as st
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -26,10 +25,11 @@ def get_embedding(text):
         st.error(f"❌ Embedding error: {e}")
         return np.zeros(1536)
 
-# --- Fetch all markets from both APIs ---
+# --- Fetch all markets from Kalshi (requires auth) ---
 def fetch_kalshi_markets():
     try:
-        r = requests.get("https://trading-api.kalshi.com/trade-api/v2/markets")
+        headers = {"Authorization": f"Bearer {st.secrets['KALSHI_API_KEY']}"}
+        r = requests.get("https://trading-api.kalshi.com/trade-api/v2/markets", headers=headers)
         markets = r.json().get('markets', [])
         st.write(f"🟢 Kalshi markets fetched: {len(markets)}")
         return markets
@@ -37,6 +37,7 @@ def fetch_kalshi_markets():
         st.error(f"Kalshi API error: {e}")
         return []
 
+# --- Fetch all markets from Polymarket (may fail on Streamlit Cloud) ---
 def fetch_polymarket_markets():
     try:
         r = requests.get("https://api.polymarket.com/v3/markets")
@@ -99,10 +100,9 @@ st.title("📈 Prediction Market Arbitrage Dashboard")
 st.write("This dashboard uses OpenAI to match Kalshi and Polymarket markets and finds arbitrage opportunities.")
 
 stake_amount = st.sidebar.number_input("Enter stake amount ($)", min_value=1, value=100)
+refresh = st.sidebar.button("🔄 Refresh")
 
-placeholder = st.empty()
-
-while True:
+if refresh:
     kalshi_data = fetch_kalshi_markets()
     poly_data = fetch_polymarket_markets()
     matches = match_markets_ai(kalshi_data, poly_data)
@@ -126,15 +126,9 @@ while True:
             'Profit ($)': profit if is_arb else ''
         })
 
-    df = None
     if rows:
         df = pd.DataFrame(rows)
         df = df.sort_values(by='Total Cost')
-
-    with placeholder.container():
-        if df is not None and not df.empty:
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.write("No matched markets or arbitrage detected.")
-
-    time.sleep(30)
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.write("No matched markets or arbitrage detected.")
