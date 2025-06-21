@@ -100,35 +100,34 @@ st.title("📈 Prediction Market Arbitrage Dashboard")
 st.write("This dashboard uses OpenAI to match Kalshi and Polymarket markets and finds arbitrage opportunities.")
 
 stake_amount = st.sidebar.number_input("Enter stake amount ($)", min_value=1, value=100)
-refresh = st.sidebar.button("🔄 Refresh")
 
-if refresh:
-    kalshi_data = fetch_kalshi_markets()
-    poly_data = fetch_polymarket_markets()
-    matches = match_markets_ai(kalshi_data, poly_data)
+# Always run logic without refresh button
+kalshi_data = fetch_kalshi_markets()
+poly_data = fetch_polymarket_markets()
+matches = match_markets_ai(kalshi_data, poly_data)
 
-    rows = []
-    for pair in matches:
-        k_price = get_kalshi_yes_bid(pair['kalshi'])
-        p_price = get_polymarket_no_price(pair['polymarket'])
-        if k_price is None or p_price is None:
-            continue
-        total = k_price + p_price
-        is_arb = total < 1.0
-        profit = calculate_profit(total, stake=stake_amount) if is_arb else None
-        rows.append({
-            'Market': pair['name'],
-            'Similarity': pair['similarity'],
-            'Kalshi YES ($)': round(k_price, 3),
-            'Polymarket NO ($)': round(p_price, 3),
-            'Total Cost': round(total, 3),
-            'Arbitrage?': '✅' if is_arb else '',
-            'Profit ($)': profit if is_arb else ''
-        })
+rows = []
+for pair in matches:
+    k_price = get_kalshi_yes_bid(pair['kalshi'])
+    p_price = get_polymarket_no_price(pair['polymarket'])
+    if k_price is None or p_price is None:
+        continue
+    total = k_price + p_price
+    is_arb = total < 1.0
+    profit = calculate_profit(total, stake=stake_amount) if is_arb else None
+    rows.append({
+        'Market': pair['name'],
+        'Similarity': pair['similarity'],
+        'Kalshi YES ($)': round(k_price, 3),
+        'Polymarket NO ($)': round(p_price, 3),
+        'Total Cost': round(total, 3),
+        'Arbitrage?': '✅' if is_arb else '',
+        'Profit ($)': profit if is_arb else ''
+    })
 
-    if rows:
-        df = pd.DataFrame(rows)
-        df = df.sort_values(by='Total Cost')
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.write("No matched markets or arbitrage detected.")
+if rows:
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by='Total Cost')
+    st.dataframe(df, use_container_width=True)
+else:
+    st.write("No matched markets or arbitrage detected.")
